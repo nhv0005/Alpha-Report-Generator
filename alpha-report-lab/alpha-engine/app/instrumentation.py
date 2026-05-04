@@ -13,7 +13,7 @@ from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
 
 from app.config import settings
 
@@ -59,6 +59,11 @@ def setup_instrumentation() -> TracerProvider:
         logger.info(f"OTLP exporter configured -> {endpoint}")
     else:
         logger.warning("DT_ENV_URL or DT_API_TOKEN not set; spans will not be exported to Dynatrace")
+
+    # Debug: Console output
+    if settings.DEBUG_TRACES:
+        provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
+        logger.info("Debug traces enabled: outputting to terminal")
 
     trace.set_tracer_provider(provider)
     _provider = provider
