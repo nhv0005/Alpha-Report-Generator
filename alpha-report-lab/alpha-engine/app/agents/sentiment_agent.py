@@ -39,7 +39,7 @@ async def analyze_sentiment(context: ReportContext) -> Dict[str, Any]:
     start = time.time()
 
     with tracer.start_as_current_span("sentiment_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "CHAIN")
+        agent_span.set_attribute("openinference.span.kind", "AGENT")
         agent_span.set_attribute("input.value", f"Sentiment for {context.ticker}")
 
         sentiment = await _wrap_tool("get_sentiment_score", get_sentiment_score, context.ticker)

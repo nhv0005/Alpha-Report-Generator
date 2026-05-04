@@ -66,7 +66,7 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
     bear_case = data.get("bear_case_target", 0.0)
 
     with tracer.start_as_current_span("writer_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "CHAIN")
+        agent_span.set_attribute("openinference.span.kind", "AGENT")
         agent_span.set_attribute("input.value", f"Compose report for {context.ticker}")
 
         client = get_openai_client()
