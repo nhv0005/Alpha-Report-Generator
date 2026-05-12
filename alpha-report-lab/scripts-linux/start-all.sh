@@ -10,6 +10,17 @@ NC='\033[0m'
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENGINE_PATH="$ROOT_DIR/alpha-engine"
 FRONTEND_PATH="$ROOT_DIR/alpha-frontend"
+VENV_PATH="$ENGINE_PATH/.venv"
+VENV_PYTHON="$VENV_PATH/bin/python"
+
+# Ensure virtual environment exists
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo -e "  ${CYAN}Creating Python virtual environment at .venv...${NC}"
+    python3 -m venv "$VENV_PATH" || { echo "Failed to create venv. Is python3 installed?"; exit 1; }
+    echo -e "  ${CYAN}Installing requirements into venv...${NC}"
+    "$VENV_PYTHON" -m pip install --upgrade pip
+    "$VENV_PYTHON" -m pip install -r "$ENGINE_PATH/requirements.txt"
+fi
 
 echo -e "\n${CYAN}=========================================${NC}"
 echo -e "${CYAN}  Alpha Report Lab - Starting Services${NC}"
@@ -24,9 +35,11 @@ fi
 ENGINE_PORT=${ALPHA_ENGINE_PORT:-8000}
 FRONTEND_PORT=${ALPHA_FRONTEND_PORT:-3000}
 
-echo -e "  Starting Alpha Engine on port $ENGINE_PORT (background)..."
+echo -e "  Starting Alpha Engine on port $ENGINE_PORT (background, venv)..."
 cd "$ENGINE_PATH" || exit
-uvicorn app.main:app --host 0.0.0.0 --port "$ENGINE_PORT" --reload > engine.log 2>&1 &
+export VIRTUAL_ENV="$VENV_PATH"
+export PATH="$VENV_PATH/bin:$PATH"
+"$VENV_PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --port "$ENGINE_PORT" --reload > engine.log 2>&1 &
 ENGINE_PID=$!
 
 echo -e "  Engine Process ID: $ENGINE_PID"

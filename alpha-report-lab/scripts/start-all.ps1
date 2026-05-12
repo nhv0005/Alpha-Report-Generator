@@ -3,6 +3,21 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path $PSScriptRoot -Parent
 $EnginePath = Join-Path $Root "alpha-engine"
 $FrontendPath = Join-Path $Root "alpha-frontend"
+$VenvPath = Join-Path $EnginePath ".venv"
+$VenvPython = Join-Path $VenvPath "Scripts\python.exe"
+
+# Ensure virtual environment exists
+if (-Not (Test-Path $VenvPython)) {
+    Write-Host "  Creating Python virtual environment at .venv..." -ForegroundColor Yellow
+    python -m venv $VenvPath
+    if (-Not (Test-Path $VenvPython)) {
+        Write-Host "  Failed to create venv. Is Python installed?" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "  Installing requirements into venv..." -ForegroundColor Yellow
+    & $VenvPython -m pip install --upgrade pip
+    & $VenvPython -m pip install -r (Join-Path $EnginePath "requirements.txt")
+}
 
 Write-Host "`n=========================================" -ForegroundColor Cyan
 Write-Host "  Alpha Report Lab - Starting Services" -ForegroundColor Cyan
@@ -20,12 +35,12 @@ if (Test-Path $envFile) {
 $EnginePort = if ($env:ALPHA_ENGINE_PORT) { $env:ALPHA_ENGINE_PORT } else { "8000" }
 $FrontendPort = if ($env:ALPHA_FRONTEND_PORT) { $env:ALPHA_FRONTEND_PORT } else { "3000" }
 
-Write-Host "  Starting Alpha Engine on port $EnginePort (background)..." -ForegroundColor Yellow
+Write-Host "  Starting Alpha Engine on port $EnginePort (background, venv)..." -ForegroundColor Yellow
 $engineJob = Start-Job -ScriptBlock {
-    param($path, $port)
+    param($path, $port, $py)
     Set-Location $path
-    uvicorn app.main:app --port $port --reload
-} -ArgumentList $EnginePath, $EnginePort
+    & $py -m uvicorn app.main:app --port $port --reload
+} -ArgumentList $EnginePath, $EnginePort, $VenvPython
 
 Write-Host "  Engine Job ID: $($engineJob.Id)" -ForegroundColor DarkGray
 
