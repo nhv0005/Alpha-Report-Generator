@@ -1,4 +1,4 @@
-# Alpha Report Generator — SE Project Write-Up
+# Alpha Report Generator
 
 **Audience:** Dynatrace Solutions Engineers who want to (a) deploy this lab to demo
 AI Observability, or (b) fork the prompts to spin up their own AI application with
