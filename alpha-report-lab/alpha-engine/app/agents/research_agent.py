@@ -44,7 +44,7 @@ async def research(context: ReportContext) -> Dict[str, Any]:
     start = time.time()
 
     with tracer.start_as_current_span("research_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "CHAIN")
+        agent_span.set_attribute("openinference.span.kind", "AGENT")
         agent_span.set_attribute("input.value", f"Research {context.ticker}")
 
         profile = await _wrap_tool("get_company_profile", get_company_profile, context.ticker)

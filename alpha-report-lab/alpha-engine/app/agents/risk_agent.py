@@ -65,7 +65,7 @@ async def assess_risk(context: ReportContext) -> Dict[str, Any]:
     data = context.gathered_data
 
     with tracer.start_as_current_span("risk_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "CHAIN")
+        agent_span.set_attribute("openinference.span.kind", "AGENT")
         agent_span.set_attribute("input.value", f"Assess risk for {context.ticker}")
 
         metrics = await _wrap_tool("get_financial_metrics", get_financial_metrics, context.ticker)

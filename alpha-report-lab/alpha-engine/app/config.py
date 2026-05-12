@@ -36,6 +36,9 @@ class Settings:
     PORT: int = int(os.getenv("PORT", os.getenv("ALPHA_ENGINE_PORT", "8000")))
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "info")
 
+    # Debug
+    DEBUG_TRACES: bool = _bool("DEBUG_TRACES", False)
+
     # OpenInference privacy
     HIDE_INPUTS: bool = _bool("OPENINFERENCE_HIDE_INPUTS", False)
     HIDE_OUTPUTS: bool = _bool("OPENINFERENCE_HIDE_OUTPUTS", False)
