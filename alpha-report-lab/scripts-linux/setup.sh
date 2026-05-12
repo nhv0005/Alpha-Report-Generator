@@ -16,7 +16,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Define environment file mappings
 declare -A MAPPINGS=(
-    [".env.example"]=".env"
     ["alpha-engine/.env.example"]="alpha-engine/.env"
     ["alpha-frontend/.env.local.example"]="alpha-frontend/.env.local"
 )
@@ -39,6 +38,6 @@ for SRC in "${!MAPPINGS[@]}"; do
 done
 
 echo -e "\n  ${YELLOW}Next steps:${NC}"
-echo -e "    1. Edit .env with your OpenAI API key and Dynatrace credentials"
+echo -e "    1. Edit alpha-engine/.env with your OpenAI API key and Dynatrace credentials"
 echo -e "    2. Run: ./tasks.sh install"
 echo -e "    3. Run: ./tasks.sh run-all\n"

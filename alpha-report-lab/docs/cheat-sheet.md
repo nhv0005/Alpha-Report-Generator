@@ -3,7 +3,7 @@
 ## Start the Lab (Windows PowerShell)
 
     .\tasks.ps1 setup       # create .env files
-    # edit .env with API keys
+    # edit alpha-engine\.env with API keys
     .\tasks.ps1 install     # pip + npm installs
     .\tasks.ps1 start       # engine in background, frontend in foreground
 

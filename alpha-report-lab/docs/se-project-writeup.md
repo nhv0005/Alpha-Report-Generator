@@ -206,7 +206,7 @@ API token with `openTelemetryTrace.ingest`.
 # from repo root
 cd alpha-report-lab
 .\tasks.ps1 setup       # creates .env files from templates
-# edit alpha-report-lab\.env with DT_ENV_URL, DT_API_TOKEN, OPENAI_API_KEY
+# edit alpha-report-lab\alpha-engine\.env with DT_ENV_URL, DT_API_TOKEN, OPENAI_API_KEY
 .\tasks.ps1 install     # pip install + npm install
 .\tasks.ps1 start       # engine background, frontend foreground
 .\tasks.ps1 test-flow   # end-to-end smoke test with status polling
@@ -267,7 +267,7 @@ Obs surfaces work out of the box.
    spend, agent breakdown, and tool-call summary.
 6. Run the token-by-agent DQL query from `dql-validation-queries.md` to show
    per-agent cost attribution.
-7. (Bonus) Toggle `HIDE_INPUTS=true` in `.env`, restart engine, generate another
+7. (Bonus) Toggle `OPENINFERENCE_HIDE_INPUTS=true` in `alpha-engine/.env`, restart engine, generate another
    report — show prompt content disappearing from spans (privacy story).
 
 ---

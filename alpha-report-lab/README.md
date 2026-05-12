@@ -88,4 +88,5 @@ See `docs/troubleshooting.md` and `docs/cheat-sheet.md`.
 
 ## Environment Variables
 
+See `alpha-engine/.env.example` and `alpha-frontend/.env.local.example` for the complete reference.
 See `.env.example` for the complete reference.

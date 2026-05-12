@@ -6,7 +6,6 @@ Write-Host "=========================================`n" -ForegroundColor Cyan
 $Root = Split-Path $PSScriptRoot -Parent
 
 $envMappings = @(
-    @{ Source = ".env.example";                      Target = ".env" },
     @{ Source = "alpha-engine\.env.example";         Target = "alpha-engine\.env" },
     @{ Source = "alpha-frontend\.env.local.example"; Target = "alpha-frontend\.env.local" }
 )
@@ -28,7 +27,7 @@ foreach ($mapping in $envMappings) {
 
 Write-Host ""
 Write-Host "  Next steps:" -ForegroundColor Yellow
-Write-Host "    1. Edit .env with your OpenAI API key and Dynatrace credentials"
+Write-Host "    1. Edit alpha-engine\.env with your OpenAI API key and Dynatrace credentials"
 Write-Host "    2. Run: .\tasks.ps1 install"
 Write-Host "    3. Run: .\tasks.ps1 run-all"
 Write-Host ""

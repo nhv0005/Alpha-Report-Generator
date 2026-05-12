@@ -70,7 +70,7 @@ Session tracking:
 
 **OpenInference spans missing**:
 - Verify "OpenTelemetry (Python) [Opt-In]" enabled.
-- Verify `DT_ENV_URL` + `DT_API_TOKEN` in `.env`.
+- Verify `DT_ENV_URL` + `DT_API_TOKEN` in `alpha-engine/.env`.
 - Verify API token has `openTelemetryTrace.ingest` scope.
 - Verify `instrumentation.py` is imported BEFORE the OpenAI client.
 
