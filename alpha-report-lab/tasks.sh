@@ -7,27 +7,31 @@ SCRIPTS_DIR="$(dirname "${BASH_SOURCE[0]}")/scripts-linux"
 # Ensure scripts are executable
 chmod +x "$SCRIPTS_DIR"/*.sh 2>/dev/null
 
+# Dynatrace event wrapper (best-effort; no-op if DT_ENV_URL / DT_API_TOKEN unset)
+# shellcheck source=scripts-linux/dt-events.sh
+source "$SCRIPTS_DIR/dt-events.sh"
+
 case $TASK in
     "setup")
-        "$SCRIPTS_DIR/setup.sh"
+        dt_run "setup" "$SCRIPTS_DIR/setup.sh"
         ;;
     "install")
-        "$SCRIPTS_DIR/install.sh"
+        dt_run "install" "$SCRIPTS_DIR/install.sh"
         ;;
     "run-engine")
-        "$SCRIPTS_DIR/start-engine.sh"
+        dt_run "run-engine" "$SCRIPTS_DIR/start-engine.sh"
         ;;
     "run-frontend")
-        "$SCRIPTS_DIR/start-frontend.sh"
+        dt_run "run-frontend" "$SCRIPTS_DIR/start-frontend.sh"
         ;;
     "run-all"|"start")
-        "$SCRIPTS_DIR/start-all.sh"
+        dt_run "$TASK" "$SCRIPTS_DIR/start-all.sh"
         ;;
     "stop"|"stop-all")
-        "$SCRIPTS_DIR/stop-all.sh"
+        dt_run "$TASK" "$SCRIPTS_DIR/stop-all.sh"
         ;;
     "clean")
-        "$SCRIPTS_DIR/clean.sh"
+        dt_run "clean" "$SCRIPTS_DIR/clean.sh"
         ;;
     "help")
         echo ""

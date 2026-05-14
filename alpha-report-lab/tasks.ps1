@@ -15,20 +15,23 @@ param(
 $ErrorActionPreference = "Stop"
 $ScriptsDir = Join-Path $PSScriptRoot "scripts"
 
+# Dynatrace event wrapper (best-effort; no-op if DT_ENV_URL / DT_API_TOKEN unset)
+. "$ScriptsDir\dt-events.ps1"
+
 switch ($Task) {
-    "setup"         { & "$ScriptsDir\setup.ps1" }
-    "install"       { & "$ScriptsDir\install.ps1" }
-    "run-engine"    { & "$ScriptsDir\start-engine.ps1" }
-    "run-frontend"  { & "$ScriptsDir\start-frontend.ps1" }
-    "run-all"       { & "$ScriptsDir\start-all.ps1" }
-    "start"         { & "$ScriptsDir\start-all.ps1" }
-    "stop"          { & "$ScriptsDir\stop-all.ps1" }
-    "stop-all"      { & "$ScriptsDir\stop-all.ps1" }
-    "test-health"   { & "$ScriptsDir\test-health.ps1" }
-    "test-generate" { & "$ScriptsDir\test-generate.ps1" }
-    "test-flow"     { & "$ScriptsDir\test-alpha-flow.ps1" }
-    "test-batch"    { & "$ScriptsDir\test-multi-ticker.ps1" }
-    "clean"         { & "$ScriptsDir\clean.ps1" }
+    "setup"         { Invoke-WithDtEvent -TaskName "setup"         -ScriptBlock { & "$ScriptsDir\setup.ps1" } }
+    "install"       { Invoke-WithDtEvent -TaskName "install"       -ScriptBlock { & "$ScriptsDir\install.ps1" } }
+    "run-engine"    { Invoke-WithDtEvent -TaskName "run-engine"    -ScriptBlock { & "$ScriptsDir\start-engine.ps1" } }
+    "run-frontend"  { Invoke-WithDtEvent -TaskName "run-frontend"  -ScriptBlock { & "$ScriptsDir\start-frontend.ps1" } }
+    "run-all"       { Invoke-WithDtEvent -TaskName "run-all"       -ScriptBlock { & "$ScriptsDir\start-all.ps1" } }
+    "start"         { Invoke-WithDtEvent -TaskName "start"         -ScriptBlock { & "$ScriptsDir\start-all.ps1" } }
+    "stop"          { Invoke-WithDtEvent -TaskName "stop"          -ScriptBlock { & "$ScriptsDir\stop-all.ps1" } }
+    "stop-all"      { Invoke-WithDtEvent -TaskName "stop-all"      -ScriptBlock { & "$ScriptsDir\stop-all.ps1" } }
+    "test-health"   { Invoke-WithDtEvent -TaskName "test-health"   -ScriptBlock { & "$ScriptsDir\test-health.ps1" } }
+    "test-generate" { Invoke-WithDtEvent -TaskName "test-generate" -ScriptBlock { & "$ScriptsDir\test-generate.ps1" } }
+    "test-flow"     { Invoke-WithDtEvent -TaskName "test-flow"     -ScriptBlock { & "$ScriptsDir\test-alpha-flow.ps1" } }
+    "test-batch"    { Invoke-WithDtEvent -TaskName "test-batch"    -ScriptBlock { & "$ScriptsDir\test-multi-ticker.ps1" } }
+    "clean"         { Invoke-WithDtEvent -TaskName "clean"         -ScriptBlock { & "$ScriptsDir\clean.ps1" } }
     "help" {
         Write-Host ""
         Write-Host "=========================================" -ForegroundColor Cyan

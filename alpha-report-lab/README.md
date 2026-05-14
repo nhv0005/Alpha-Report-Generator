@@ -83,10 +83,14 @@ See `docs/openpipeline-configuration.md` for attribute rename rules
 ## Validation
 See `docs/validate-dynatrace.md` for the post-test checklist and DQL queries.
 
+## Task-Runner Observability
+Every `tasks.ps1` / `tasks.sh` invocation pushes start/success/failure events
+(with duration) to Dynatrace via the Events API. Requires the `events.ingest`
+scope on `DT_API_TOKEN`. See `docs/task-runner-observability.md`.
+
 ## Troubleshooting
 See `docs/troubleshooting.md` and `docs/cheat-sheet.md`.
 
 ## Environment Variables
 
 See `alpha-engine/.env.example` and `alpha-frontend/.env.local.example` for the complete reference.
-See `.env.example` for the complete reference.
