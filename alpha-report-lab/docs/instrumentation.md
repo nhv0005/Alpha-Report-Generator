@@ -94,7 +94,150 @@ Both carry: `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.mod
 | `alpha-engine/app/agents/<agent>.py` | Each agent declares `AGENT_DESCRIPTION` + `AGENT_TOOLS` constants and calls the helpers above inside its `invoke_agent <name>` span. |
 | `alpha-engine/app/agents/orchestrator.py` | Top-level `invoke_agent alpha_orchestrator` span; wraps the entire pipeline. |
 
-### 2.1 Where each attribute / metric is captured in code
+### 2.1 Instrumentation hierarchy & module relationships
+
+The instrumentation is intentionally split into three concentric layers so
+that adding a new agent never requires touching the SDK setup, and changing
+the SDK setup never requires touching agent code.
+
+```
+                          ┌──────────────────────────────────────┐
+                          │              .env file               │
+                          │  DT_ENV_URL, DT_API_TOKEN,           │
+                          │  OPENAI_*, SERVICE_NAME,             │
+                          │  DEBUG_TRACES, HIDE_INPUTS, ...      │
+                          └────────────────┬─────────────────────┘
+                                           │  load_dotenv() + os.getenv
+                                           ▼
+                          ┌──────────────────────────────────────┐
+              Layer 0:    │             app/config.py            │
+              Config      │   @dataclass Settings  →  settings   │
+                          │   (single immutable singleton)       │
+                          └────────────────┬─────────────────────┘
+                                           │  from app.config import settings
+                          ┌────────────────┴─────────────────────┐
+                          ▼                                      ▼
+        ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+Layer 1:│       app/instrumentation.py     │   │      app/agents/llm_metrics.py   │
+SDK     │  - TracerProvider + OTLP traces  │   │  - measure_llm_call(...)         │
+setup + │  - MeterProvider + OTLP metrics  │◄──┤  - record_llm_metrics(...)       │
+helpers │    (DELTA temporality)           │   │  - set_agent_span_attributes(...)│
+        │  - OpenAIInstrumentor().instrument()│  - set_agent_input_messages(...) │
+        │  - module-level: tracer, meter,  │   │  - set_agent_output_messages(...)│
+        │    gen_ai_token_usage,           │   │                                  │
+        │    gen_ai_operation_duration     │   │  Reads instrumentation.tracer /  │
+        └────────────────┬─────────────────┘   │  .gen_ai_token_usage /           │
+                         │                     │  .gen_ai_operation_duration      │
+                         │ from app.instrumentation import tracer
+                         │                                                       │
+                         ▼                                                       ▼
+        ┌────────────────────────────────────────────────────────────────────────┐
+Layer 2:│                       app/agents/<agent>.py                            │
+Agents  │   research_agent.py · analysis_agent.py · sentiment_agent.py           │
+        │   risk_agent.py     · writer_agent.py    · orchestrator.py             │
+        │                                                                        │
+        │   with tracer.start_as_current_span("invoke_agent <name>") as span:    │
+        │       set_agent_span_attributes(span, ...)        ← from llm_metrics   │
+        │       set_agent_input_messages(span, ...)         ← from llm_metrics   │
+        │       with measure_llm_call(<name>, model) as r:  ← from llm_metrics   │
+        │           response = await client.chat.completions.create(...)         │
+        │           r(response)                                                  │
+        │       set_agent_output_messages(span, ...)        ← from llm_metrics   │
+        └────────────────────────────────┬───────────────────────────────────────┘
+                                         │
+                                         ▼
+        ┌────────────────────────────────────────────────────────────────────────┐
+                              OTLP HTTP exporters
+              (traces) → DT_ENV_URL/api/v2/otlp/v1/traces
+              (metrics)→ DT_ENV_URL/api/v2/otlp/v1/metrics  (DELTA, every 10s)
+        └────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Bootstrap order (`main.py`)
+
+`main.py` is the only place that knows about the bootstrap sequence. The
+order is non-negotiable and is the cause of pitfalls §5.1 and §5.3:
+
+```
+main.py
+ │
+ 1. import settings from app.config            ← pure config, no OTel imports
+ │
+ 2. logging.basicConfig(...)                   ← MUST be before step 4
+ │
+ 3. raise log level on every "opentelemetry.*" logger
+ │
+ 4. from app.instrumentation import setup_instrumentation
+ │  setup_instrumentation()                    ← MUST be before step 5
+ │      • build TracerProvider + OTLP trace exporter
+ │      • build MeterProvider + OTLP metric exporter (DELTA temporality)
+ │      • create gen_ai.client.token.usage / .operation.duration histograms
+ │      • smoke-test record + force_flush
+ │      • OpenAIInstrumentor().instrument()    ← monkey-patches `openai`
+ │
+ 5. import the rest of the app (FastAPI, routes, agents, openai client, ...)
+```
+
+See `@c:\Users\nicoe.welch\Documents\Windsurf\Alpha Report\alpha-report-lab\alpha-engine\app\main.py:11-36`.
+
+#### Who imports whom (one-liner each)
+
+| Module | Imports from `app.config` | Imports from `app.instrumentation` | Imports from `app.agents.llm_metrics` |
+|---|:-:|:-:|:-:|
+| `app/main.py` | ✅ `settings` | ✅ `setup_instrumentation`, `shutdown` | — |
+| `app/instrumentation.py` | ✅ `settings` | (defines) | — |
+| `app/agents/llm_metrics.py` | ✅ `settings` (privacy flags) | ✅ `tracer`, `gen_ai_token_usage`, `gen_ai_operation_duration` (module-level) | (defines) |
+| `app/agents/<agent>.py` | ✅ `settings` (model name) | ✅ `tracer` | ✅ `measure_llm_call`, `set_agent_span_attributes`, `set_agent_input_messages`, `set_agent_output_messages` |
+| `app/agents/orchestrator.py` | ✅ `settings` | ✅ `tracer` | ✅ `set_agent_span_attributes`, `set_agent_input_messages`, `set_agent_output_messages` |
+
+The graph is **acyclic** and one-directional (`config → instrumentation →
+llm_metrics → agents`). Nothing flows the other way, which is what lets
+`main.py` enforce the bootstrap order described above.
+
+#### Role of each module
+
+**`app/config.py`** — *the only place that reads `os.environ`.*
+Loads `.env` via `python-dotenv`, builds a single immutable `Settings`
+dataclass instance, and exports it as `settings`. Every other module
+imports this singleton; nobody else calls `os.getenv` for instrumentation
+config. This is what guarantees the OTLP endpoint, token, and privacy
+flags are consistent across the trace exporter, the metric exporter, and
+every agent. See `@c:\Users\nicoe.welch\Documents\Windsurf\Alpha Report\alpha-report-lab\alpha-engine\app\config.py:19-52`.
+
+**`app/instrumentation.py`** — *the OTel SDK boundary.*
+The only file that imports from `opentelemetry.sdk.*`. It owns:
+
+- the `TracerProvider` with the OTLP HTTP trace exporter,
+- the `MeterProvider` with the OTLP HTTP metric exporter (DELTA temporality),
+- the two GenAI histograms (`gen_ai.client.token.usage`, `gen_ai.client.operation.duration`),
+- the `OpenAIInstrumentor` install,
+- module-level handles (`tracer`, `meter`, `gen_ai_token_usage`, `gen_ai_operation_duration`) that everyone else imports.
+
+If you want to add a new exporter, change temporality, or wire in a new
+auto-instrumentor, this is the **only** file you touch.
+
+**`app/agents/llm_metrics.py`** — *the agent-facing API over the SDK.*
+A thin façade so that agents never need to know about OTel attribute
+names, histogram instruments, or aggregation rules. Provides four helpers:
+
+- `measure_llm_call(agent, model)` — context manager that times the LLM call and writes both histograms with the canonical `gen_ai.*` attribute set, including `error.type` if an exception escapes.
+- `set_agent_span_attributes(span, ...)` — stamps the canonical agent-span attribute set from the Dynatrace docs.
+- `set_agent_input_messages(span, ...)` / `set_agent_output_messages(span, ...)` — set `gen_ai.input.messages` / `gen_ai.output.messages` while honoring the `HIDE_INPUTS` / `HIDE_OUTPUTS` privacy flags.
+
+This indirection is what makes the GenAI-attribute standardization
+enforceable: a typo like `agent.name` (instead of `gen_ai.agent.name`) is
+impossible because no agent writes attribute names directly.
+
+**`app/agents/<agent>.py` and `orchestrator.py`** — *pure business logic.*
+Each agent declares two constants (`AGENT_DESCRIPTION`, `AGENT_TOOLS`) and
+follows the same five-step skeleton: open span → set attrs → run tools as
+child spans → wrap LLM call in `measure_llm_call` → attach
+`gen_ai.usage.*_tokens` + output messages. Agents never import from the
+OTel SDK directly.
+
+---
+
+### 2.2 Where each attribute / metric is captured in code
 
 The tables in §1 are the *contract*. The snippets below show the exact lines
 in the codebase that produce each piece of telemetry, so you can see how to
