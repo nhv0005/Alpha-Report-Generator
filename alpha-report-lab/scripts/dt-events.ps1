@@ -1,4 +1,4 @@
-# dt-events.ps1 — Dynatrace Events API v2 helper for task scripts.
+# dt-events.ps1 - Dynatrace Events API v2 helper for task scripts.
 #
 # Dot-source this from a task script:
 #     . "$PSScriptRoot\dt-events.ps1"
@@ -42,7 +42,7 @@ function Send-DtEvent {
 
     $cfg = Get-DtConfig
     if (-not $cfg.EnvUrl -or -not $cfg.ApiToken) {
-        Write-Host "  [dt-events] DT_ENV_URL/DT_API_TOKEN not set — skipping push." -ForegroundColor DarkGray
+        Write-Host "  [dt-events] DT_ENV_URL/DT_API_TOKEN not set - skipping push." -ForegroundColor DarkGray
         return
     }
 
@@ -62,9 +62,14 @@ function Send-DtEvent {
         Invoke-RestMethod -Method Post -Uri $endpoint `
             -Headers @{ Authorization = "Api-Token $($cfg.ApiToken)"; "Content-Type" = "application/json" } `
             -Body $body -TimeoutSec 10 | Out-Null
-        Write-Host "  [dt-events] $EventType pushed: $Title" -ForegroundColor DarkGray
+        Write-Host "  [dt-events] $EventType pushed: $Title  (POST $endpoint)" -ForegroundColor DarkGray
     } catch {
-        Write-Host "  [dt-events] push failed (non-fatal): $($_.Exception.Message)" -ForegroundColor DarkYellow
+        $statusCode = $null
+        if ($_.Exception.Response) { $statusCode = [int]$_.Exception.Response.StatusCode }
+        Write-Host "  [dt-events] push failed (non-fatal):" -ForegroundColor DarkYellow
+        Write-Host "    URL    : POST $endpoint" -ForegroundColor DarkYellow
+        Write-Host "    Status : $statusCode" -ForegroundColor DarkYellow
+        Write-Host "    Error  : $($_.Exception.Message)" -ForegroundColor DarkYellow
     }
 }
 

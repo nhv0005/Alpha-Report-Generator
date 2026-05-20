@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
+from app.agents.llm_metrics import measure_llm_call
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -85,14 +86,16 @@ async def assess_risk(context: ReportContext) -> Dict[str, Any]:
             f"(below the current ${price.current_price:.2f} price), and an overall risk rating "
             f"of LOW / MEDIUM / HIGH / VERY_HIGH."
         )
-        resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": RISK_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.3,
-        )
+        with measure_llm_call("risk_agent", settings.OPENAI_MODEL) as record:
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": RISK_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+            )
+            record(resp)
         content = resp.choices[0].message.content or ""
         tokens = resp.usage.total_tokens if resp.usage else 0
 

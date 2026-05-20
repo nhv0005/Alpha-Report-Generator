@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
+from app.agents.llm_metrics import measure_llm_call
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -65,14 +66,16 @@ async def research(context: ReportContext) -> Dict[str, Any]:
             f"YoY growth {metrics.revenue_growth_yoy*100:.1f}%. "
             f"Mention 2-3 notable recent headlines. Use crisp Markdown (300-400 words)."
         )
-        response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.3,
-        )
+        with measure_llm_call("research_agent", settings.OPENAI_MODEL) as record:
+            response = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": RESEARCH_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+            )
+            record(response)
         content = response.choices[0].message.content or ""
         tokens = response.usage.total_tokens if response.usage else 0
 

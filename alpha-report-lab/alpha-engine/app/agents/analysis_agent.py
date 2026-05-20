@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
+from app.agents.llm_metrics import measure_llm_call
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -70,14 +71,16 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
             f"Peer data: {serialize(peer_comparison)[:1200]}. "
             f"Investment horizon: {context.investment_horizon}. Be specific about the target price."
         )
-        fund_resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": FUNDAMENTAL_PROMPT},
-                {"role": "user", "content": fund_prompt},
-            ],
-            temperature=0.25,
-        )
+        with measure_llm_call("analysis_agent", settings.OPENAI_MODEL) as record:
+            fund_resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": FUNDAMENTAL_PROMPT},
+                    {"role": "user", "content": fund_prompt},
+                ],
+                temperature=0.25,
+            )
+            record(fund_resp)
         fund_content = fund_resp.choices[0].message.content or ""
         fund_tokens = fund_resp.usage.total_tokens if fund_resp.usage else 0
 
@@ -91,14 +94,16 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
             f"Support ${technicals.support:.2f}, Resistance ${technicals.resistance:.2f}. "
             f"Explain the setup and short-term trading signals. Mention momentum regime."
         )
-        tech_resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": TECHNICAL_PROMPT},
-                {"role": "user", "content": tech_prompt},
-            ],
-            temperature=0.25,
-        )
+        with measure_llm_call("analysis_agent", settings.OPENAI_MODEL) as record:
+            tech_resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": TECHNICAL_PROMPT},
+                    {"role": "user", "content": tech_prompt},
+                ],
+                temperature=0.25,
+            )
+            record(tech_resp)
         tech_content = tech_resp.choices[0].message.content or ""
         tech_tokens = tech_resp.usage.total_tokens if tech_resp.usage else 0
 

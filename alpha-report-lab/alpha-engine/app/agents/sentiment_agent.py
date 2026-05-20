@@ -7,6 +7,7 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
+from app.agents.llm_metrics import measure_llm_call
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -60,14 +61,16 @@ async def analyze_sentiment(context: ReportContext) -> Dict[str, Any]:
             f"target ${ratings.target_price:.2f}.\n\nRecent headlines:\n{headline_lines}\n\n"
             f"Summarize the dominant narrative, any narrative shifts, and top 3 themes."
         )
-        resp = await client.chat.completions.create(
-            model=settings.OPENAI_FAST_MODEL,
-            messages=[
-                {"role": "system", "content": SENTIMENT_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.4,
-        )
+        with measure_llm_call("sentiment_agent", settings.OPENAI_FAST_MODEL) as record:
+            resp = await client.chat.completions.create(
+                model=settings.OPENAI_FAST_MODEL,
+                messages=[
+                    {"role": "system", "content": SENTIMENT_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+            )
+            record(resp)
         content = resp.choices[0].message.content or ""
         tokens = resp.usage.total_tokens if resp.usage else 0
 

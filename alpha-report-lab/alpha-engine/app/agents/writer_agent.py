@@ -9,6 +9,7 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client
+from app.agents.llm_metrics import measure_llm_call
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -88,11 +89,13 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             f"Write the Executive Summary (3-4 paragraphs) with thesis, conviction level, "
             f"target price, and risk/reward framing.\n\n{common_ctx}"
         )
-        exec_resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": exec_prompt}],
-            temperature=0.4,
-        )
+        with measure_llm_call("writer_agent", settings.OPENAI_MODEL) as record:
+            exec_resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": exec_prompt}],
+                temperature=0.4,
+            )
+            record(exec_resp)
         exec_content = exec_resp.choices[0].message.content or ""
         exec_tokens = exec_resp.usage.total_tokens if exec_resp.usage else 0
 
@@ -102,11 +105,13 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             f"changes, product launches, and macro catalysts that could impact the thesis. "
             f"Provide 5-7 specific, ranked catalysts with expected timing.\n\n{common_ctx}"
         )
-        cat_resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": cat_prompt}],
-            temperature=0.4,
-        )
+        with measure_llm_call("writer_agent", settings.OPENAI_MODEL) as record:
+            cat_resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": cat_prompt}],
+                temperature=0.4,
+            )
+            record(cat_resp)
         cat_content = cat_resp.choices[0].message.content or ""
         cat_tokens = cat_resp.usage.total_tokens if cat_resp.usage else 0
 
@@ -117,11 +122,13 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             f"thesis, target price, recommended timeframe, and position-sizing guidance "
             f"appropriate for a {context.risk_tolerance} investor.\n\n{common_ctx}"
         )
-        rec_resp = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
-            messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": rec_prompt}],
-            temperature=0.3,
-        )
+        with measure_llm_call("writer_agent", settings.OPENAI_MODEL) as record:
+            rec_resp = await client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
+                messages=[{"role": "system", "content": WRITER_PROMPT}, {"role": "user", "content": rec_prompt}],
+                temperature=0.3,
+            )
+            record(rec_resp)
         rec_content = rec_resp.choices[0].message.content or ""
         rec_tokens = rec_resp.usage.total_tokens if rec_resp.usage else 0
 

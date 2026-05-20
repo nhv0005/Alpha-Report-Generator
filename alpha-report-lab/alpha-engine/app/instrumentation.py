@@ -9,8 +9,11 @@ import logging
 import os
 from typing import Optional
 
-from opentelemetry import trace
+from opentelemetry import metrics, trace
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
@@ -20,8 +23,13 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 _provider: Optional[TracerProvider] = None
+_meter_provider: Optional[MeterProvider] = None
 # Module-level tracer; re-bound in setup_instrumentation()
 tracer = trace.get_tracer("alpha-engine", "1.0.0")
+# Module-level meter + histograms; re-bound in setup_instrumentation()
+meter = metrics.get_meter("alpha-engine", "1.0.0")
+gen_ai_token_usage = None  # type: ignore[assignment]
+gen_ai_operation_duration = None  # type: ignore[assignment]
 
 
 def setup_instrumentation() -> TracerProvider:
@@ -29,7 +37,7 @@ def setup_instrumentation() -> TracerProvider:
 
     Returns the configured TracerProvider.
     """
-    global _provider, tracer
+    global _provider, _meter_provider, tracer, meter, gen_ai_token_usage, gen_ai_operation_duration
     if _provider is not None:
         return _provider
 
@@ -43,9 +51,9 @@ def setup_instrumentation() -> TracerProvider:
 
     # Configure OTLP HTTP exporter -> Dynatrace
     if settings.DT_ENV_URL and settings.DT_API_TOKEN:
-        endpoint = settings.DT_ENV_URL.rstrip("/") + "/api/v2/otlp/v1/traces"
+        traces_endpoint = settings.DT_ENV_URL.rstrip("/") + "/api/v2/otlp/v1/traces"
         exporter = OTLPSpanExporter(
-            endpoint=endpoint,
+            endpoint=traces_endpoint,
             headers={"Authorization": f"Api-Token {settings.DT_API_TOKEN}"},
         )
         provider.add_span_processor(
@@ -56,7 +64,7 @@ def setup_instrumentation() -> TracerProvider:
                 schedule_delay_millis=5000,
             )
         )
-        logger.info(f"OTLP exporter configured -> {endpoint}")
+        logger.info(f"OTLP traces exporter configured -> {traces_endpoint}")
     else:
         logger.warning("DT_ENV_URL or DT_API_TOKEN not set; spans will not be exported to Dynatrace")
 
@@ -68,6 +76,41 @@ def setup_instrumentation() -> TracerProvider:
     trace.set_tracer_provider(provider)
     _provider = provider
     tracer = trace.get_tracer("alpha-engine", "1.0.0")
+
+    # --- Metrics (OTel GenAI semantic conventions) ---
+    metric_readers = []
+    if settings.DT_ENV_URL and settings.DT_API_TOKEN:
+        metrics_endpoint = settings.DT_ENV_URL.rstrip("/") + "/api/v2/otlp/v1/metrics"
+        metric_exporter = OTLPMetricExporter(
+            endpoint=metrics_endpoint,
+            headers={"Authorization": f"Api-Token {settings.DT_API_TOKEN}"},
+        )
+        metric_readers.append(
+            PeriodicExportingMetricReader(metric_exporter, export_interval_millis=10_000)
+        )
+        logger.info(f"OTLP metrics exporter configured -> {metrics_endpoint}")
+    if settings.DEBUG_TRACES:
+        metric_readers.append(
+            PeriodicExportingMetricReader(ConsoleMetricExporter(), export_interval_millis=15_000)
+        )
+
+    meter_provider = MeterProvider(resource=resource, metric_readers=metric_readers)
+    metrics.set_meter_provider(meter_provider)
+    _meter_provider = meter_provider
+    meter = metrics.get_meter("alpha-engine", "1.0.0")
+
+    # GenAI semantic-convention histograms
+    # https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-metrics/
+    gen_ai_token_usage = meter.create_histogram(
+        name="gen_ai.client.token.usage",
+        unit="{token}",
+        description="Measures number of input and output tokens used.",
+    )
+    gen_ai_operation_duration = meter.create_histogram(
+        name="gen_ai.client.operation.duration",
+        unit="s",
+        description="GenAI operation duration.",
+    )
 
     # Install OpenInference OpenAI instrumentor
     try:
@@ -90,8 +133,8 @@ def setup_instrumentation() -> TracerProvider:
 
 
 def shutdown() -> None:
-    """Flush and shut down the tracer provider."""
-    global _provider
+    """Flush and shut down the tracer + meter providers."""
+    global _provider, _meter_provider
     if _provider is not None:
         try:
             _provider.force_flush()
@@ -102,3 +145,13 @@ def shutdown() -> None:
         except Exception:
             pass
         _provider = None
+    if _meter_provider is not None:
+        try:
+            _meter_provider.force_flush()
+        except Exception:
+            pass
+        try:
+            _meter_provider.shutdown()
+        except Exception:
+            pass
+        _meter_provider = None
