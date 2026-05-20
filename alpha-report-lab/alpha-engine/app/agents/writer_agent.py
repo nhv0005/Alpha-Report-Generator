@@ -9,7 +9,12 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client
-from app.agents.llm_metrics import measure_llm_call
+from app.agents.llm_metrics import (
+    measure_llm_call,
+    set_agent_input_messages,
+    set_agent_output_messages,
+    set_agent_span_attributes,
+)
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -23,6 +28,11 @@ WRITER_PROMPT = (
     "executive-ready narratives. Format all output in clean Markdown with headers, "
     "bullet points, bold key figures, and tables where appropriate."
 )
+AGENT_DESCRIPTION = (
+    "Investment writer. Composes the Executive Summary, Catalyst Identification, "
+    "and final Recommendation sections of the Alpha Report."
+)
+AGENT_TOOLS: list[str] = []  # writer is pure synthesis, no tools
 
 
 def _parse_recommendation(text: str, target_price: float, current_price: float) -> tuple[str, float]:
@@ -66,9 +76,18 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
     sentiment = data.get("sentiment_data")
     bear_case = data.get("bear_case_target", 0.0)
 
-    with tracer.start_as_current_span("writer_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "AGENT")
-        agent_span.set_attribute("input.value", f"Compose report for {context.ticker}")
+    with tracer.start_as_current_span("invoke_agent writer_agent") as agent_span:
+        set_agent_span_attributes(
+            agent_span,
+            agent_name="writer_agent",
+            description=AGENT_DESCRIPTION,
+            request_model=settings.OPENAI_MODEL,
+            tool_definitions=AGENT_TOOLS,
+            system_instructions=WRITER_PROMPT,
+        )
+        set_agent_input_messages(agent_span, [
+            {"role": "user", "content": f"Compose Alpha Report for {context.ticker} (horizon {context.investment_horizon}, tolerance {context.risk_tolerance})"},
+        ])
 
         client = get_openai_client()
 
@@ -97,7 +116,9 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             )
             record(exec_resp)
         exec_content = exec_resp.choices[0].message.content or ""
-        exec_tokens = exec_resp.usage.total_tokens if exec_resp.usage else 0
+        exec_in = exec_resp.usage.prompt_tokens if exec_resp.usage else 0
+        exec_out = exec_resp.usage.completion_tokens if exec_resp.usage else 0
+        exec_tokens = exec_in + exec_out
 
         # Catalysts
         cat_prompt = (
@@ -113,7 +134,9 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             )
             record(cat_resp)
         cat_content = cat_resp.choices[0].message.content or ""
-        cat_tokens = cat_resp.usage.total_tokens if cat_resp.usage else 0
+        cat_in = cat_resp.usage.prompt_tokens if cat_resp.usage else 0
+        cat_out = cat_resp.usage.completion_tokens if cat_resp.usage else 0
+        cat_tokens = cat_in + cat_out
 
         # Recommendation
         rec_prompt = (
@@ -130,7 +153,9 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             )
             record(rec_resp)
         rec_content = rec_resp.choices[0].message.content or ""
-        rec_tokens = rec_resp.usage.total_tokens if rec_resp.usage else 0
+        rec_in = rec_resp.usage.prompt_tokens if rec_resp.usage else 0
+        rec_out = rec_resp.usage.completion_tokens if rec_resp.usage else 0
+        rec_tokens = rec_in + rec_out
 
         recommendation, conviction = _parse_recommendation(rec_content, target_price, price.current_price)
 
@@ -151,8 +176,13 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
             generation_time_ms=int((time.time() - start) * 1000 // 3),
         )
 
-        agent_span.set_attribute("output.value", f"{recommendation} ({conviction:.1f}/10)")
-        agent_span.set_attribute("llm.token_count.total", exec_tokens + cat_tokens + rec_tokens)
+        agent_span.set_attribute("gen_ai.usage.input_tokens", exec_in + cat_in + rec_in)
+        agent_span.set_attribute("gen_ai.usage.output_tokens", exec_out + cat_out + rec_out)
+        set_agent_output_messages(agent_span, [
+            {"role": "assistant", "content": exec_content, "section": "executive_summary"},
+            {"role": "assistant", "content": cat_content,  "section": "catalysts"},
+            {"role": "assistant", "content": rec_content,  "section": "recommendation"},
+        ])
 
     return {
         "executive_summary_section": exec_section,

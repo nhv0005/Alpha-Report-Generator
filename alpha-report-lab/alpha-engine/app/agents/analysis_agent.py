@@ -7,7 +7,12 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
-from app.agents.llm_metrics import measure_llm_call
+from app.agents.llm_metrics import (
+    measure_llm_call,
+    set_agent_input_messages,
+    set_agent_output_messages,
+    set_agent_span_attributes,
+)
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -27,17 +32,19 @@ TECHNICAL_PROMPT = (
     "averages, RSI, MACD, and support/resistance levels. Be specific about "
     "signals and their strength. Format as Markdown."
 )
+AGENT_DESCRIPTION = (
+    "Quantitative analyst. Produces fundamental + technical analysis sections "
+    "and derives a target price from peer comparison and DCF-style heuristics."
+)
+AGENT_TOOLS = ["compare_peers", "get_technical_indicators"]
 
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
-    with tracer.start_as_current_span(f"tool:{tool_name}") as span:
-        span.set_attribute("openinference.span.kind", "TOOL")
-        span.set_attribute("tool.name", tool_name)
-        params = {"args": args, "kwargs": kwargs}
-        span.set_attribute("tool.parameters", serialize(params))
-        span.set_attribute("input.value", serialize(params))
+    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+        span.set_attribute("gen_ai.operation.name", "execute_tool")
+        span.set_attribute("gen_ai.tool.name", tool_name)
+        span.set_attribute("gen_ai.provider.name", "openai")
         result = fn(*args, **kwargs)
-        span.set_attribute("output.value", serialize(result))
         return result
 
 
@@ -46,9 +53,18 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
     start = time.time()
     data = context.gathered_data
 
-    with tracer.start_as_current_span("analysis_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "AGENT")
-        agent_span.set_attribute("input.value", f"Analyze {context.ticker}")
+    with tracer.start_as_current_span("invoke_agent analysis_agent") as agent_span:
+        set_agent_span_attributes(
+            agent_span,
+            agent_name="analysis_agent",
+            description=AGENT_DESCRIPTION,
+            request_model=settings.OPENAI_MODEL,
+            tool_definitions=AGENT_TOOLS,
+            system_instructions=FUNDAMENTAL_PROMPT + "\n---\n" + TECHNICAL_PROMPT,
+        )
+        set_agent_input_messages(agent_span, [
+            {"role": "user", "content": f"Analyze {context.ticker} (horizon {context.investment_horizon})"},
+        ])
 
         peers_list = data.get("peers", [])
         peer_comparison = await _wrap_tool("compare_peers", compare_peers, context.ticker, peers_list)
@@ -82,7 +98,9 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
             )
             record(fund_resp)
         fund_content = fund_resp.choices[0].message.content or ""
-        fund_tokens = fund_resp.usage.total_tokens if fund_resp.usage else 0
+        fund_in = fund_resp.usage.prompt_tokens if fund_resp.usage else 0
+        fund_out = fund_resp.usage.completion_tokens if fund_resp.usage else 0
+        fund_tokens = fund_in + fund_out
 
         # Technical analysis
         tech_prompt = (
@@ -105,7 +123,9 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
             )
             record(tech_resp)
         tech_content = tech_resp.choices[0].message.content or ""
-        tech_tokens = tech_resp.usage.total_tokens if tech_resp.usage else 0
+        tech_in = tech_resp.usage.prompt_tokens if tech_resp.usage else 0
+        tech_out = tech_resp.usage.completion_tokens if tech_resp.usage else 0
+        tech_tokens = tech_in + tech_out
 
         # Extract target price: use a heuristic anchored to peer median P/E applied to current earnings
         peer_pes = [p.pe_ratio for p in peer_comparison if p.pe_ratio and p.pe_ratio > 0]
@@ -134,8 +154,12 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
             generation_time_ms=int((time.time() - start) * 1000 // 2),
         )
 
-        agent_span.set_attribute("output.value", f"target_price={target_price}")
-        agent_span.set_attribute("llm.token_count.total", fund_tokens + tech_tokens)
+        agent_span.set_attribute("gen_ai.usage.input_tokens", fund_in + tech_in)
+        agent_span.set_attribute("gen_ai.usage.output_tokens", fund_out + tech_out)
+        set_agent_output_messages(agent_span, [
+            {"role": "assistant", "content": fund_content, "section": "fundamental"},
+            {"role": "assistant", "content": tech_content, "section": "technical"},
+        ])
 
     return {
         "fundamental_section": fund_section,

@@ -11,6 +11,12 @@ from openinference.instrumentation import using_attributes
 from opentelemetry import trace
 
 from app.agents import analysis_agent, research_agent, risk_agent, sentiment_agent, writer_agent
+from app.agents.llm_metrics import (
+    set_agent_input_messages,
+    set_agent_output_messages,
+    set_agent_span_attributes,
+)
+from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import GenerateRequest
 from app.services.context import ContextManager
@@ -61,13 +67,27 @@ async def generate_alpha_report(
             "environment": "local-lab",
         },
     ):
-        with tracer.start_as_current_span("alpha_orchestrator") as orch_span:
-            orch_span.set_attribute("openinference.span.kind", "AGENT")
-            orch_span.set_attribute("input.value", json.dumps({
-                "ticker": request.ticker,
-                "horizon": request.investment_horizon,
-                "risk_tolerance": request.risk_tolerance,
-            }))
+        with tracer.start_as_current_span("invoke_agent alpha_orchestrator") as orch_span:
+            set_agent_span_attributes(
+                orch_span,
+                agent_name="alpha_orchestrator",
+                description=(
+                    "Supervisor agent. Coordinates research, analysis, sentiment, "
+                    "risk, and writer sub-agents to build a complete Alpha Report."
+                ),
+                request_model=settings.OPENAI_MODEL,
+                tool_definitions=[
+                    "research_agent", "analysis_agent", "sentiment_agent",
+                    "risk_agent", "writer_agent",
+                ],
+            )
+            set_agent_input_messages(orch_span, [
+                {"role": "user", "content": json.dumps({
+                    "ticker": request.ticker,
+                    "horizon": request.investment_horizon,
+                    "risk_tolerance": request.risk_tolerance,
+                })},
+            ])
 
             # Attach trace_id to report metadata
             trace_id = format(orch_span.get_span_context().trace_id, "032x")
@@ -143,18 +163,21 @@ async def generate_alpha_report(
                 await report_store.finalize(report_id)
                 await report_store.update_status(report_id, "complete", "Report complete", "orchestrator")
 
-                orch_span.set_attribute("output.value", json.dumps({
-                    "recommendation": writer_out["recommendation"],
-                    "conviction_score": writer_out["conviction_score"],
-                    "target_price": target_price,
-                    "upside_pct": round(upside_pct, 2),
-                }))
+                orch_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["stop"]))
+                set_agent_output_messages(orch_span, [
+                    {"role": "assistant", "content": json.dumps({
+                        "recommendation": writer_out["recommendation"],
+                        "conviction_score": writer_out["conviction_score"],
+                        "target_price": target_price,
+                        "upside_pct": round(upside_pct, 2),
+                        "risk_rating": risk_out["risk_rating"],
+                    })},
+                ])
                 logger.info(f"[orchestrator] Report {report_id} complete: {writer_out['recommendation']} (conv {writer_out['conviction_score']:.1f})")
 
             except _CancelledByUser:
                 logger.info(f"[orchestrator] Report {report_id} cancelled by user")
-                orch_span.set_attribute("cancelled", True)
-                orch_span.set_attribute("output.value", json.dumps({"cancelled": True}))
+                orch_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["cancelled"]))
                 await report_store.update_status(
                     report_id, "cancelled", "Cancelled by user", "orchestrator"
                 )
@@ -162,7 +185,8 @@ async def generate_alpha_report(
             except Exception as e:
                 logger.exception(f"[orchestrator] Report {report_id} failed: {e}")
                 orch_span.record_exception(e)
-                orch_span.set_attribute("error", True)
+                orch_span.set_attribute("error.type", type(e).__name__)
+                orch_span.set_attribute("gen_ai.response.finish_reasons", json.dumps(["error"]))
                 await report_store.update_status(report_id, "error", f"Failed: {e}", "orchestrator")
 
 

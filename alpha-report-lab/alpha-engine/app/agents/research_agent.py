@@ -7,7 +7,12 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
-from app.agents.llm_metrics import measure_llm_call
+from app.agents.llm_metrics import (
+    measure_llm_call,
+    set_agent_input_messages,
+    set_agent_output_messages,
+    set_agent_span_attributes,
+)
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -25,18 +30,24 @@ RESEARCH_SYSTEM_PROMPT = (
     "and recent developments. Be thorough, factual, and cite specific numbers "
     "where relevant. Format output as clean Markdown with headers and bullet points."
 )
+AGENT_DESCRIPTION = (
+    "Senior equity research analyst. Gathers company profile, price data, "
+    "financial metrics, earnings, news, and peers; produces the Company "
+    "Overview section."
+)
+AGENT_TOOLS = [
+    "get_company_profile", "get_price_data", "get_financial_metrics",
+    "get_quarterly_earnings", "search_news", "get_peers",
+]
 
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
-    """Run a mock tool inside a TOOL span with OpenInference attributes."""
-    with tracer.start_as_current_span(f"tool:{tool_name}") as span:
-        span.set_attribute("openinference.span.kind", "TOOL")
-        span.set_attribute("tool.name", tool_name)
-        params = {"args": args, "kwargs": kwargs}
-        span.set_attribute("tool.parameters", serialize(params))
-        span.set_attribute("input.value", serialize(params))
+    """Run a mock tool inside a span using OTel GenAI semantic conventions."""
+    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+        span.set_attribute("gen_ai.operation.name", "execute_tool")
+        span.set_attribute("gen_ai.tool.name", tool_name)
+        span.set_attribute("gen_ai.provider.name", "openai")
         result = fn(*args, **kwargs)
-        span.set_attribute("output.value", serialize(result))
         return result
 
 
@@ -44,9 +55,18 @@ async def research(context: ReportContext) -> Dict[str, Any]:
     logger.info(f"[research_agent] Starting research for {context.ticker}")
     start = time.time()
 
-    with tracer.start_as_current_span("research_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "AGENT")
-        agent_span.set_attribute("input.value", f"Research {context.ticker}")
+    with tracer.start_as_current_span("invoke_agent research_agent") as agent_span:
+        set_agent_span_attributes(
+            agent_span,
+            agent_name="research_agent",
+            description=AGENT_DESCRIPTION,
+            request_model=settings.OPENAI_MODEL,
+            tool_definitions=AGENT_TOOLS,
+            system_instructions=RESEARCH_SYSTEM_PROMPT,
+        )
+        set_agent_input_messages(agent_span, [
+            {"role": "user", "content": f"Research {context.ticker}"},
+        ])
 
         profile = await _wrap_tool("get_company_profile", get_company_profile, context.ticker)
         price = await _wrap_tool("get_price_data", get_price_data, context.ticker)
@@ -77,7 +97,10 @@ async def research(context: ReportContext) -> Dict[str, Any]:
             )
             record(response)
         content = response.choices[0].message.content or ""
-        tokens = response.usage.total_tokens if response.usage else 0
+        usage = response.usage
+        input_tokens = usage.prompt_tokens if usage else 0
+        output_tokens = usage.completion_tokens if usage else 0
+        tokens = (input_tokens + output_tokens) if usage else 0
 
         section = ReportSection(
             id=str(uuid.uuid4()),
@@ -95,8 +118,11 @@ async def research(context: ReportContext) -> Dict[str, Any]:
             generation_time_ms=int((time.time() - start) * 1000),
         )
 
-        agent_span.set_attribute("output.value", "Research complete")
-        agent_span.set_attribute("llm.token_count.total", tokens)
+        agent_span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+        agent_span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+        set_agent_output_messages(agent_span, [
+            {"role": "assistant", "content": content},
+        ])
 
     return {
         "company_profile": profile,

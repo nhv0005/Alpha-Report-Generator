@@ -7,7 +7,12 @@ import uuid
 from typing import Any, Dict
 
 from app.agents.llm_client import get_openai_client, serialize
-from app.agents.llm_metrics import measure_llm_call
+from app.agents.llm_metrics import (
+    measure_llm_call,
+    set_agent_input_messages,
+    set_agent_output_messages,
+    set_agent_span_attributes,
+)
 from app.config import settings
 from app.instrumentation import tracer
 from app.models.report import ReportSection
@@ -21,17 +26,19 @@ SENTIMENT_PROMPT = (
     "flow, and social media sentiment for equities. Quantify sentiment where "
     "possible and identify narrative shifts. Format as Markdown."
 )
+AGENT_DESCRIPTION = (
+    "Sentiment analyst. Combines news sentiment, social sentiment, and analyst "
+    "consensus to produce the Sentiment Analysis section."
+)
+AGENT_TOOLS = ["get_sentiment_score", "get_analyst_ratings"]
 
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
-    with tracer.start_as_current_span(f"tool:{tool_name}") as span:
-        span.set_attribute("openinference.span.kind", "TOOL")
-        span.set_attribute("tool.name", tool_name)
-        params = {"args": args, "kwargs": kwargs}
-        span.set_attribute("tool.parameters", serialize(params))
-        span.set_attribute("input.value", serialize(params))
+    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+        span.set_attribute("gen_ai.operation.name", "execute_tool")
+        span.set_attribute("gen_ai.tool.name", tool_name)
+        span.set_attribute("gen_ai.provider.name", "openai")
         result = fn(*args, **kwargs)
-        span.set_attribute("output.value", serialize(result))
         return result
 
 
@@ -39,9 +46,18 @@ async def analyze_sentiment(context: ReportContext) -> Dict[str, Any]:
     logger.info(f"[sentiment_agent] Analyzing sentiment for {context.ticker}")
     start = time.time()
 
-    with tracer.start_as_current_span("sentiment_agent") as agent_span:
-        agent_span.set_attribute("openinference.span.kind", "AGENT")
-        agent_span.set_attribute("input.value", f"Sentiment for {context.ticker}")
+    with tracer.start_as_current_span("invoke_agent sentiment_agent") as agent_span:
+        set_agent_span_attributes(
+            agent_span,
+            agent_name="sentiment_agent",
+            description=AGENT_DESCRIPTION,
+            request_model=settings.OPENAI_FAST_MODEL,
+            tool_definitions=AGENT_TOOLS,
+            system_instructions=SENTIMENT_PROMPT,
+        )
+        set_agent_input_messages(agent_span, [
+            {"role": "user", "content": f"Sentiment for {context.ticker}"},
+        ])
 
         sentiment = await _wrap_tool("get_sentiment_score", get_sentiment_score, context.ticker)
         ratings = await _wrap_tool("get_analyst_ratings", get_analyst_ratings, context.ticker)
@@ -72,7 +88,9 @@ async def analyze_sentiment(context: ReportContext) -> Dict[str, Any]:
             )
             record(resp)
         content = resp.choices[0].message.content or ""
-        tokens = resp.usage.total_tokens if resp.usage else 0
+        input_tokens = resp.usage.prompt_tokens if resp.usage else 0
+        output_tokens = resp.usage.completion_tokens if resp.usage else 0
+        tokens = input_tokens + output_tokens
 
         section = ReportSection(
             id=str(uuid.uuid4()),
@@ -85,8 +103,11 @@ async def analyze_sentiment(context: ReportContext) -> Dict[str, Any]:
             generation_time_ms=int((time.time() - start) * 1000),
         )
 
-        agent_span.set_attribute("output.value", f"sentiment={sentiment.overall_score:+.2f}")
-        agent_span.set_attribute("llm.token_count.total", tokens)
+        agent_span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+        agent_span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+        set_agent_output_messages(agent_span, [
+            {"role": "assistant", "content": content},
+        ])
 
     return {
         "sentiment_section": section,
