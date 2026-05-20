@@ -76,7 +76,7 @@ async def compose_report(context: ReportContext) -> Dict[str, Any]:
     sentiment = data.get("sentiment_data")
     bear_case = data.get("bear_case_target", 0.0)
 
-    with tracer.start_as_current_span("invoke_agent writer_agent") as agent_span:
+    with tracer.start_as_current_span("AGENT writer_agent") as agent_span:
         set_agent_span_attributes(
             agent_span,
             agent_name="writer_agent",

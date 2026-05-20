@@ -67,7 +67,7 @@ async def generate_alpha_report(
             "environment": "local-lab",
         },
     ):
-        with tracer.start_as_current_span("invoke_agent alpha_orchestrator") as orch_span:
+        with tracer.start_as_current_span("AGENT alpha_orchestrator") as orch_span:
             set_agent_span_attributes(
                 orch_span,
                 agent_name="alpha_orchestrator",

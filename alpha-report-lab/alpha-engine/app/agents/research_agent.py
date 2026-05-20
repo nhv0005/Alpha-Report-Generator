@@ -43,7 +43,7 @@ AGENT_TOOLS = [
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
     """Run a mock tool inside a span using OTel GenAI semantic conventions."""
-    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+    with tracer.start_as_current_span(f"TOOL {tool_name}") as span:
         span.set_attribute("gen_ai.operation.name", "execute_tool")
         span.set_attribute("gen_ai.tool.name", tool_name)
         span.set_attribute("gen_ai.provider.name", "openai")
@@ -55,7 +55,7 @@ async def research(context: ReportContext) -> Dict[str, Any]:
     logger.info(f"[research_agent] Starting research for {context.ticker}")
     start = time.time()
 
-    with tracer.start_as_current_span("invoke_agent research_agent") as agent_span:
+    with tracer.start_as_current_span("AGENT research_agent") as agent_span:
         set_agent_span_attributes(
             agent_span,
             agent_name="research_agent",

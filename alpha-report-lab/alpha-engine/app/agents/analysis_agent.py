@@ -40,7 +40,7 @@ AGENT_TOOLS = ["compare_peers", "get_technical_indicators"]
 
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
-    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+    with tracer.start_as_current_span(f"TOOL {tool_name}") as span:
         span.set_attribute("gen_ai.operation.name", "execute_tool")
         span.set_attribute("gen_ai.tool.name", tool_name)
         span.set_attribute("gen_ai.provider.name", "openai")
@@ -53,7 +53,7 @@ async def analyze(context: ReportContext) -> Dict[str, Any]:
     start = time.time()
     data = context.gathered_data
 
-    with tracer.start_as_current_span("invoke_agent analysis_agent") as agent_span:
+    with tracer.start_as_current_span("AGENT analysis_agent") as agent_span:
         set_agent_span_attributes(
             agent_span,
             agent_name="analysis_agent",

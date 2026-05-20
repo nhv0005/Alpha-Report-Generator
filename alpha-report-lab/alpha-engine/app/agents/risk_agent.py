@@ -36,7 +36,7 @@ AGENT_TOOLS = ["get_financial_metrics"]
 
 
 async def _wrap_tool(tool_name: str, fn, *args, **kwargs):
-    with tracer.start_as_current_span(f"execute_tool {tool_name}") as span:
+    with tracer.start_as_current_span(f"TOOL {tool_name}") as span:
         span.set_attribute("gen_ai.operation.name", "execute_tool")
         span.set_attribute("gen_ai.tool.name", tool_name)
         span.set_attribute("gen_ai.provider.name", "openai")
