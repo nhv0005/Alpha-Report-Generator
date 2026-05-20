@@ -78,7 +78,13 @@ def setup_instrumentation() -> TracerProvider:
     tracer = trace.get_tracer("alpha-engine", "1.0.0")
 
     # --- Metrics (OTel GenAI semantic conventions) ---
+    logger.info(
+        f"Instrumentation env: DT_ENV_URL={'set' if settings.DT_ENV_URL else 'EMPTY'}, "
+        f"DT_API_TOKEN={'set (len=' + str(len(settings.DT_API_TOKEN)) + ')' if settings.DT_API_TOKEN else 'EMPTY'}, "
+        f"DEBUG_TRACES={settings.DEBUG_TRACES}"
+    )
     metric_readers = []
+    metric_exporter = None
     if settings.DT_ENV_URL and settings.DT_API_TOKEN:
         metrics_endpoint = settings.DT_ENV_URL.rstrip("/") + "/api/v2/otlp/v1/metrics"
         metric_exporter = OTLPMetricExporter(
@@ -89,10 +95,15 @@ def setup_instrumentation() -> TracerProvider:
             PeriodicExportingMetricReader(metric_exporter, export_interval_millis=10_000)
         )
         logger.info(f"OTLP metrics exporter configured -> {metrics_endpoint}")
+    else:
+        logger.warning(
+            "OTLP metrics exporter NOT configured: DT_ENV_URL or DT_API_TOKEN is empty"
+        )
     if settings.DEBUG_TRACES:
         metric_readers.append(
             PeriodicExportingMetricReader(ConsoleMetricExporter(), export_interval_millis=15_000)
         )
+        logger.info("Console metric exporter enabled (DEBUG_TRACES=true)")
 
     meter_provider = MeterProvider(resource=resource, metric_readers=metric_readers)
     metrics.set_meter_provider(meter_provider)
@@ -111,6 +122,31 @@ def setup_instrumentation() -> TracerProvider:
         unit="s",
         description="GenAI operation duration.",
     )
+
+    # --- Smoke test: record one synthetic data point and force-flush so we
+    #     can confirm whether the OTLP HTTP exporter is reaching Dynatrace. ---
+    if metric_exporter is not None:
+        try:
+            gen_ai_operation_duration.record(0.001, attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.provider.name": "openai",
+                "gen_ai.request.model": "startup-smoketest",
+                "gen_ai.agent.name": "instrumentation_smoketest",
+            })
+            gen_ai_token_usage.record(1, attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.provider.name": "openai",
+                "gen_ai.request.model": "startup-smoketest",
+                "gen_ai.agent.name": "instrumentation_smoketest",
+                "gen_ai.token.type": "input",
+            })
+            flushed = meter_provider.force_flush(timeout_millis=10_000)
+            logger.info(
+                f"Metric smoke-test force_flush returned {flushed} "
+                f"(True = export attempted; check above for any exporter WARNING)"
+            )
+        except Exception as e:
+            logger.exception(f"Metric smoke test failed: {e}")
 
     # Install OpenInference OpenAI instrumentor
     try:

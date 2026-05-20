@@ -8,7 +8,29 @@ from __future__ import annotations
 import logging
 import os
 
-# --- Instrumentation must come first ---
+# --- Logging FIRST so instrumentation startup messages (and any OTel SDK
+#     warnings about exporter failures) are captured by the file handler. ---
+from app.config import settings  # safe: pure pydantic, no instrumentation
+
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+# Make sure OTel SDK loggers (which log exporter HTTP failures at WARNING)
+# propagate to our handlers so a 401/403 lands in engine.log.
+for _name in (
+    "opentelemetry",
+    "opentelemetry.sdk",
+    "opentelemetry.exporter.otlp",
+    "opentelemetry.exporter.otlp.proto.http",
+    "opentelemetry.exporter.otlp.proto.http.metric_exporter",
+    "opentelemetry.exporter.otlp.proto.http.trace_exporter",
+    "opentelemetry.sdk.metrics._internal.export",
+):
+    logging.getLogger(_name).setLevel(logging.INFO)
+logger = logging.getLogger("alpha-engine")
+
+# --- Instrumentation must run BEFORE the OpenAI client is created ---
 from app.instrumentation import setup_instrumentation, shutdown as shutdown_tracing
 
 setup_instrumentation()
@@ -19,16 +41,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.routes import alpha, embeddings, health
 from app.services.context import ContextManager
 from app.services.report_store import ReportStore
-
-logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger("alpha-engine")
 
 
 @asynccontextmanager
