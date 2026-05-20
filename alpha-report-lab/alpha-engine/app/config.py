@@ -30,7 +30,7 @@ class Settings:
     DT_API_TOKEN: str = os.getenv("DT_API_TOKEN", "")
 
     # App
-    SERVICE_NAME: str = os.getenv("SERVICE_NAME", "alpha-engine")
+    SERVICE_NAME: str = os.getenv("SERVICE_NAME", "Alpha Engine")
     SERVICE_VERSION: str = os.getenv("SERVICE_VERSION", "1.0.0")
     DEPLOYMENT_ENV: str = os.getenv("DEPLOYMENT_ENV", "local-lab")
     PORT: int = int(os.getenv("PORT", os.getenv("ALPHA_ENGINE_PORT", "8000")))
