@@ -12,8 +12,20 @@ from typing import Optional
 from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
+from opentelemetry.sdk.metrics import (
+    Counter,
+    Histogram,
+    MeterProvider,
+    ObservableCounter,
+    ObservableGauge,
+    ObservableUpDownCounter,
+    UpDownCounter,
+)
+from opentelemetry.sdk.metrics.export import (
+    AggregationTemporality,
+    ConsoleMetricExporter,
+    PeriodicExportingMetricReader,
+)
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter, SimpleSpanProcessor
@@ -87,14 +99,29 @@ def setup_instrumentation() -> TracerProvider:
     metric_exporter = None
     if settings.DT_ENV_URL and settings.DT_API_TOKEN:
         metrics_endpoint = settings.DT_ENV_URL.rstrip("/") + "/api/v2/otlp/v1/metrics"
+        # Dynatrace requires DELTA aggregation temporality for counters and
+        # histograms; CUMULATIVE payloads are accepted (HTTP 200) then silently
+        # dropped. See https://docs.dynatrace.com/docs/shortlink/otel-getstarted-otlpexport#metrics
+        delta_temporality = {
+            Counter: AggregationTemporality.DELTA,
+            UpDownCounter: AggregationTemporality.CUMULATIVE,
+            Histogram: AggregationTemporality.DELTA,
+            ObservableCounter: AggregationTemporality.DELTA,
+            ObservableUpDownCounter: AggregationTemporality.CUMULATIVE,
+            ObservableGauge: AggregationTemporality.CUMULATIVE,
+        }
         metric_exporter = OTLPMetricExporter(
             endpoint=metrics_endpoint,
             headers={"Authorization": f"Api-Token {settings.DT_API_TOKEN}"},
+            preferred_temporality=delta_temporality,
         )
         metric_readers.append(
             PeriodicExportingMetricReader(metric_exporter, export_interval_millis=10_000)
         )
-        logger.info(f"OTLP metrics exporter configured -> {metrics_endpoint}")
+        logger.info(
+            f"OTLP metrics exporter configured -> {metrics_endpoint} "
+            f"(temporality: DELTA for Counter/Histogram, CUMULATIVE for UpDownCounter/Gauge)"
+        )
     else:
         logger.warning(
             "OTLP metrics exporter NOT configured: DT_ENV_URL or DT_API_TOKEN is empty"
