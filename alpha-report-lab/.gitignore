@@ -65,3 +65,6 @@ Thumbs.db
 # Local report cache, if any
 reports.json
 *.pid
+
+# --- Local context / scratch files ---
+Prompt Context.md
