@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@dynatrace-oss/dt-evals": "^0.1.4-alpha"
+  }
+}

@@ -66,13 +66,12 @@ gcloud compute ssh <USERNAME>@<INSTANCE_NAME> \
   --ssh-flag="-L 3000:localhost:3000"
 ```
 
-> **Concrete example** (matches the original command):
+> **Concrete example** (single-line, no backslash continuation):
 > ```bash
-> gcloud compute ssh mrplzdontmess@alpha-report-generator \
->   --zone=us-central1-f \
->   --tunnel-through-iap \
->   --ssh-flag="-L 3000:localhost:3000"
+> gcloud compute ssh mrplzdontmess@alpha-report-generator --zone=us-central1-f --project=custom-octagon-438612-f4 --tunnel-through-iap --ssh-flag="-L 3000:localhost:3000"
 > ```
+>
+> This opens an interactive SSH session on the VM **and** simultaneously forwards VM port `3000` to your local machine's port `3000`. While this terminal stays open, `http://localhost:3000` in your browser loads the frontend running on the VM. Closing the terminal (or pressing `Ctrl+D` / `exit`) tears down both the SSH session and the tunnel.
 
 **What `--ssh-flag="-L 3000:localhost:3000"` does:** opens local port `3000` on your
 machine and tunnels all traffic to `localhost:3000` on the VM (where the frontend is

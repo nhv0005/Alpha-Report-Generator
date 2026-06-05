@@ -1,0 +1,594 @@
+﻿{
+  "id": "e5f5d010-8bd9-4f84-9213-9a2681c592fa",
+  "name": "OrderStatusDasbhoard",
+  "type": "dashboard",
+  "owner": "eb87fbe6-b390-463e-a124-c1569931973b",
+  "isPrivate": true,
+  "version": 7,
+  "modificationInfo": {
+    "createdBy": "",
+    "createdTime": "2025-07-07T14:05:01.603Z",
+    "lastModifiedBy": "",
+    "lastModifiedTime": "2025-10-14T19:48:18.039Z"
+  },
+  "content": {
+    "version": 20,
+    "variables": [
+      {
+        "version": 2,
+        "key": "OrderStatus",
+        "type": "csv",
+        "visible": true,
+        "input": "Processing,Shipped,Delivered,Canceled,On Hold",
+        "multiple": true,
+        "defaultValue": [
+          "*"
+        ]
+      },
+      {
+        "version": 2,
+        "key": "ProductCategory",
+        "type": "csv",
+        "visible": true,
+        "input": "Laptop,Desktop,Monitor,Accessory",
+        "multiple": true,
+        "defaultValue": [
+          "*"
+        ]
+      }
+    ],
+    "tiles": {
+      "0": {
+        "title": "Order Summary by Product Category",
+        "type": "data",
+        "query": "data\n  record(ProductCategory=\"Laptop\", TotalOrders=12540, AvgProcessingTime=1.2, Shipped=11890, Delayed=350, Canceled=300, SuccessRate=97.6),\n  record(ProductCategory=\"Desktop\", TotalOrders=8750, AvgProcessingTime=2.1, Shipped=8550, Delayed=120, Canceled=80, SuccessRate=99.08),\n  record(ProductCategory=\"Monitor\", TotalOrders=15200, AvgProcessingTime=0.8, Shipped=15100, Delayed=50, Canceled=50, SuccessRate=99.67),\n  record(ProductCategory=\"Accessory\", TotalOrders=22430, AvgProcessingTime=0.5, Shipped=22310, Delayed=25, Canceled=95, SuccessRate=99.57),\n  record(ProductCategory=\"Laptop\", TotalOrders=50, AvgProcessingTime=5.5, Shipped=10, Delayed=35, Canceled=5, SuccessRate=20.0)\n\n| sort SuccessRate asc\n| filter in(ProductCategory, $ProductCategory)",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "colorThresholdTarget": "background",
+            "enableThresholdInRow": true,
+            "selectedColumnForRowThreshold": "SuccessRate"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "SuccessRate",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 95
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 98
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 98
+                }
+              ]
+            }
+          ]
+        },
+        "davis": {
+          "enabled": false,
+          "davisVisualization": {
+            "isAvailable": true
+          }
+        },
+        "timeframe": {
+          "tileTimeframe": {
+            "from": "now()-2h",
+            "to": "now()"
+          },
+          "tileTimeframeEnabled": false
+        }
+      },
+      "1": {
+        "title": "Regional Performance",
+        "type": "data",
+        "query": "data\n  record(Region=\"NA\", TotalOrders=28543, AvgDeliveryTimeDays=3.1, DelayedOrders=310, OnTimeRate=98.91),\n  record(Region=\"EMEA\", TotalOrders=19821, AvgDeliveryTimeDays=4.5, DelayedOrders=254, OnTimeRate=98.71),\n  record(Region=\"APJ\", TotalOrders=10234, AvgDeliveryTimeDays=5.2, DelayedOrders=121, OnTimeRate=98.81),\n  record(Region=\"LATAM\", TotalOrders=5432, AvgDeliveryTimeDays=7.8, DelayedOrders=240, OnTimeRate=95.58)",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "colorThresholdTarget": "background",
+            "selectedColumnForRowThreshold": "OnTimeRate"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "OnTimeRate",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 96
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 98
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 98
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "2": {
+        "title": "Shipping Carrier Performance",
+        "type": "data",
+        "query": "data\n  record(Carrier=\"FedEx\", ShippedVolume=25432, AvgDeliveryTime=2.8, OnTimePercentage=99.2),\n  record(Carrier=\"UPS\", ShippedVolume=21876, AvgDeliveryTime=2.9, OnTimePercentage=99.1),\n  record(Carrier=\"DHL\", ShippedVolume=10543, AvgDeliveryTime=4.8, OnTimePercentage=97.5),\n  record(Carrier=\"Local Post\", ShippedVolume=6179, AvgDeliveryTime=6.2, OnTimePercentage=96.1)",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "colorThresholdTarget": "background",
+            "selectedColumnForRowThreshold": "OnTimePercentage"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "OnTimePercentage",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 97
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 99
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 99
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "6": {
+        "title": "Synthetic Portal Checks",
+        "type": "data",
+        "query": "data\n  record(check_name=\"Dell.com - Order Status Page Load\", _time=\"2024-11-10T23:38:33.000-0500\", check_id=101, Errors=0, PageLoadTime_ms=850),\n  record(check_name=\"Dell.com - Order History API\", _time=\"2024-11-10T23:39:11.000-0500\", check_id=102, Errors=0, ResponseTime_ms=210),\n  record(check_name=\"Dell.com - Track Shipment API\", _time=\"2024-11-10T23:40:18.000-0500\", check_id=103, Errors=1, ResponseTime_ms=5500),\n  record(check_name=\"Dell.com - Order Status Page Load\", _time=\"2024-11-10T23:43:33.000-0500\", check_id=101, Errors=0, PageLoadTime_ms=910),\n  record(check_name=\"Dell.com - Order History API\", _time=\"2024-11-10T23:44:11.000-0500\", check_id=102, Errors=0, ResponseTime_ms=235),\n  record(check_name=\"Dell.com - Track Shipment API\", _time=\"2024-11-10T23:45:18.000-0500\", check_id=103, Errors=0, ResponseTime_ms=450)\n\n  | fields check_name, _time, check_id, Errors, PageLoadTime_ms, ResponseTime_ms",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "colorThresholdTarget": "background",
+            "selectedColumnForRowThreshold": "Errors"
+          },
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "Errors",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "=",
+                  "label": "",
+                  "value": 0
+                },
+                {
+                  "id": 1,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "\u003e",
+                  "label": "",
+                  "value": 0
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "7": {
+        "title": "Real-time Order Events (Last 30 Mins)",
+        "type": "data",
+        "query": "data\n  record(_time=\"2024-11-10T20:10:00.000-0500\", OrderID=\"US-883721A\", ProductCategory=\"Laptop\", OrderStatus=\"Shipped\", CustomerRegion=\"NA\", ShippingCarrier=\"FedEx\", IsDelayed=false),\n  record(_time=\"2024-11-10T20:09:30.000-0500\", OrderID=\"EU-554839B\", ProductCategory=\"Monitor\", OrderStatus=\"Delivered\", CustomerRegion=\"EMEA\", ShippingCarrier=\"DHL\", IsDelayed=false),\n  record(_time=\"2024-11-10T20:08:15.000-0500\", OrderID=\"US-883711C\", ProductCategory=\"Desktop\", OrderStatus=\"Processing\", CustomerRegion=\"NA\", ShippingCarrier=\"UPS\", IsDelayed=false),\n  record(_time=\"2024-11-10T20:07:05.000-0500\", OrderID=\"AP-234987D\", ProductCategory=\"Accessory\", OrderStatus=\"Shipped\", CustomerRegion=\"APJ\", ShippingCarrier=\"Local Post\", IsDelayed=true),\n  record(_time=\"2024-11-10T20:06:45.000-0500\", OrderID=\"US-883705E\", ProductCategory=\"Laptop\", OrderStatus=\"Canceled\", CustomerRegion=\"NA\", ShippingCarrier=null, IsDelayed=false),\n  record(_time=\"2024-11-10T20:05:00.000-0500\", OrderID=\"EU-554830F\", ProductCategory=\"Monitor\", OrderStatus=\"Shipped\", CustomerRegion=\"EMEA\", ShippingCarrier=\"DHL\", IsDelayed=false),\n  record(_time=\"2024-11-10T20:04:12.000-0500\", OrderID=\"US-883699G\", ProductCategory=\"Accessory\", OrderStatus=\"Delivered\", CustomerRegion=\"NA\", ShippingCarrier=\"FedEx\", IsDelayed=false),\n  record(_time=\"2024-11-10T20:02:20.000-0500\", OrderID=\"US-883691H\", ProductCategory=\"Laptop\", OrderStatus=\"On Hold\", CustomerRegion=\"NA\", ShippingCarrier=null, IsDelayed=true),\n  record(_time=\"2024-11-10T20:01:00.000-0500\", OrderID=\"AP-234980I\", ProductCategory=\"Desktop\", OrderStatus=\"Shipped\", CustomerRegion=\"APJ\", ShippingCarrier=\"Local Post\", IsDelayed=false)\n\n  | filter in(OrderStatus, $OrderStatus) \n  | filter in(ProductCategory, $ProductCategory)",
+        "visualization": "table",
+        "visualizationSettings": {
+          "table": {
+            "colorThresholdTarget": "background",
+            "selectedColumnForRowThreshold": "OrderStatus"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "OrderStatus",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "=",
+                  "label": "",
+                  "value": "Canceled"
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "=",
+                  "label": "",
+                  "value": "On Hold"
+                }
+              ]
+            }
+          ]
+        },
+        "timeframe": {
+          "tileTimeframe": {
+            "from": "now()-30m",
+            "to": "now()"
+          },
+          "tileTimeframeEnabled": false
+        }
+      },
+      "8": {
+        "title": "",
+        "type": "data",
+        "query": "data\n  record(TotalOrders=59123)",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "label": "Total Orders (24h)",
+            "recordField": "TotalOrders",
+            "prefixIcon": ""
+          },
+          "autoSelectVisualization": false,
+          "thresholds": []
+        }
+      },
+      "9": {
+        "title": "",
+        "type": "data",
+        "query": "data\n  record(DelayedOrders=565)",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "label": "Delayed Orders",
+            "recordField": "DelayedOrders",
+            "prefixIcon": "",
+            "colorThresholdTarget": "background"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "DelayedOrders",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 100
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 500
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 500
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "10": {
+        "title": "",
+        "type": "data",
+        "query": "data\n  record(CancellationRate=0.89)",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "label": "Cancellation Rate %",
+            "recordField": "CancellationRate",
+            "prefixIcon": "",
+            "colorThresholdTarget": "background"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "CancellationRate",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 1
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 2
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 2
+                }
+              ]
+            }
+          ],
+          "unitsOverrides": [
+            {
+              "identifier": "CancellationRate",
+              "unitCategory": "percentage",
+              "baseUnit": "percent",
+              "decimals": 2,
+              "suffix": "",
+              "delimiter": false,
+              "added": 1751897101655
+            }
+          ]
+        }
+      },
+      "11": {
+        "title": "",
+        "type": "data",
+        "query": "data\n  record(AvgProcessingTime=1.3)",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "label": "Avg Processing Time (Days)",
+            "recordField": "AvgProcessingTime",
+            "prefixIcon": "",
+            "colorThresholdTarget": "background"
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [
+            {
+              "id": 1,
+              "field": "AvgProcessingTime",
+              "title": "",
+              "isEnabled": true,
+              "rules": [
+                {
+                  "id": 0,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-apdex-good-default, #1c520a)"
+                  },
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 2
+                },
+                {
+                  "id": 1,
+                  "color": "#FFBF00",
+                  "comparator": "\u003c",
+                  "label": "",
+                  "value": 4
+                },
+                {
+                  "id": 2,
+                  "color": {
+                    "Default": "var(--dt-colors-charts-status-critical-default, #c4233b)"
+                  },
+                  "comparator": "ΓëÑ",
+                  "label": "",
+                  "value": 4
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "14": {
+        "title": "",
+        "type": "data",
+        "query": "data record(a=\"Dell.com Customer Order Status\")",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "labelMode": "none",
+            "label": "a",
+            "recordField": "a"
+          },
+          "autoSelectVisualization": false
+        }
+      },
+      "17": {
+        "type": "markdown",
+        "content": "![](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAAFACAMAAAD6TlWYAAAC31BMVEVHcEwAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8sAg8voa4wCAAAA9XRSTlMADXXRYgcBMqr3//GTHxFz4f7OUQUCPbj6kR07ODEqIxoQCReB6ctNBC4DIfPt5NrMvad7SwpJxPzvjRsWzfX2v1+K+OKMWCceju79yErXyQ5j++OeRlWJGbxhnMXPcRUL2OyFw1AwqcJDmXDg64MU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)"
+      },
+      "19": {
+        "type": "markdown",
+        "content": "---"
+      },
+      "20": {
+        "title": "",
+        "type": "data",
+        "query": "data\n  record(GeneratedRevenue=8450234.50)",
+        "visualization": "singleValue",
+        "visualizationSettings": {
+          "singleValue": {
+            "label": "Generated Revenue",
+            "recordField": "GeneratedRevenue",
+            "prefixIcon": ""
+          },
+          "autoSelectVisualization": false,
+          "thresholds": [],
+          "unitsOverrides": [
+            {
+              "identifier": "GeneratedRevenue",
+              "unitCategory": "currency",
+              "baseUnit": "USD",
+              "displayUnit": "USD",
+              "decimals": 2,
+              "suffix": "",
+              "delimiter": false,
+              "added": 1751897101655
+            }
+          ]
+        }
+      }
+    },
+    "layouts": {
+      "0": {
+        "x": 0,
+        "y": 7,
+        "w": 14,
+        "h": 7
+      },
+      "1": {
+        "x": 0,
+        "y": 19,
+        "w": 12,
+        "h": 7
+      },
+      "2": {
+        "x": 12,
+        "y": 19,
+        "w": 12,
+        "h": 7
+      },
+      "6": {
+        "x": 14,
+        "y": 7,
+        "w": 10,
+        "h": 7
+      },
+      "7": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 5
+      },
+      "8": {
+        "x": 2,
+        "y": 5,
+        "w": 4,
+        "h": 2
+      },
+      "9": {
+        "x": 10,
+        "y": 5,
+        "w": 4,
+        "h": 2
+      },
+      "10": {
+        "x": 14,
+        "y": 5,
+        "w": 4,
+        "h": 2
+      },
+      "11": {
+        "x": 18,
+        "y": 5,
+        "w": 4,
+        "h": 2
+      },
+      "14": {
+        "x": 4,
+        "y": 0,
+        "w": 20,
+        "h": 2
+      },
+      "17": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "19": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 1
+      },
+      "20": {
+        "x": 6,
+        "y": 5,
+        "w": 4,
+        "h": 2
+      }
+    },
+    "importedWithCode": false,
+    "settings": {}
+  }
+}

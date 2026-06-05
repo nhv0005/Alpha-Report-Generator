@@ -1,0 +1,255 @@
+{
+  "version": 18,
+  "variables": [
+    {
+      "key": "timeframe",
+      "type": "timeframe",
+      "input": "now-24h",
+      "multiple": false
+    },
+    {
+      "key": "service_name",
+      "type": "query",
+      "visible": true,
+      "input": "fetch dt.entity.service\n| filter contains(entity.name, \"alpha-engine\")\n| fields entity.name\n| sort entity.name asc",
+      "multiple": false,
+      "defaultValue": "Alpha Engine"
+    },
+    {
+      "key": "agent_name",
+      "type": "query",
+      "visible": true,
+      "input": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter isNotNull(gen_ai.agent.name)\n| summarize by: { gen_ai.agent.name }\n| sort gen_ai.agent.name asc",
+      "multiple": true,
+      "defaultValue": "*"
+    }
+  ],
+  "tiles": {
+    "0": {
+      "type": "markdown",
+      "content": "# Alpha Report Generator — AI Observability\n\n**Service:** `alpha-engine`  ·  **Frontend:** `alpha-frontend`\n\nLive view of the multi-agent report pipeline: token spend per agent + model, p95 latency, finish reasons, tool-call mix, and full report-run audit trail.\n\n- Spans: OpenTelemetry + OpenInference → `/api/v2/otlp/v1/traces`\n- Metrics: OTel GenAI histograms (`gen_ai.client.token.usage`, `gen_ai.client.operation.duration`) → `/api/v2/otlp/v1/metrics` (DELTA)\n- Lifecycle events: `tasks.ps1` / `tasks.sh` → Events API v2\n\nSee `docs/instrumentation.md` for the wiring."
+    },
+    "1": {
+      "type": "data",
+      "title": "Reports generated",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter span.name == \"invoke_agent alpha_orchestrator\"\n| summarize reports = count()",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "showLabel": true,
+          "label": "Reports (selected timeframe)",
+          "prefixIcon": "DescriptionIcon",
+          "alignment": "center"
+        }
+      }
+    },
+    "2": {
+      "type": "data",
+      "title": "Total tokens",
+      "query": "timeseries total = sum(gen_ai.client.token.usage), from: $timeframe.from, to: $timeframe.to\n| fieldsAdd total_tokens = arraySum(total)\n| fields total_tokens",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "showLabel": true,
+          "label": "Tokens",
+          "prefixIcon": "TokenIcon",
+          "alignment": "center"
+        }
+      }
+    },
+    "3": {
+      "type": "data",
+      "title": "Avg report duration (s)",
+      "query": "timeseries avg_dur = avg(gen_ai.client.operation.duration),\n  filter: { gen_ai.agent.name == \"alpha_orchestrator\" },\n  from: $timeframe.from, to: $timeframe.to\n| fieldsAdd avg_seconds = arrayAvg(avg_dur)\n| fields avg_seconds",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "showLabel": true,
+          "label": "Avg report duration (s)",
+          "prefixIcon": "TimerIcon",
+          "alignment": "center"
+        }
+      }
+    },
+    "4": {
+      "type": "data",
+      "title": "Error rate",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter span.name == \"invoke_agent alpha_orchestrator\"\n| summarize\n    total  = count(),\n    errors = countIf(gen_ai.response.finish_reasons == \"[\\\"error\\\"]\")\n| fieldsAdd error_rate_pct = if(total > 0, 100 * errors / total, else: 0)\n| fields error_rate_pct",
+      "visualization": "singleValue",
+      "visualizationSettings": {
+        "singleValue": {
+          "showLabel": true,
+          "label": "Error rate (%)",
+          "prefixIcon": "CriticalIcon",
+          "alignment": "center",
+          "thresholds": [
+            { "title": "OK",   "color": "var(--dt-colors-charts-categorical-color-04-default, #2eb24c)", "rules": [{ "value": 0,  "comparator": ">=" }] },
+            { "title": "Warn", "color": "var(--dt-colors-charts-categorical-color-12-default, #efb700)", "rules": [{ "value": 2,  "comparator": ">=" }] },
+            { "title": "Bad",  "color": "var(--dt-colors-charts-categorical-color-15-default, #dc172a)", "rules": [{ "value": 10, "comparator": ">=" }] }
+          ]
+        }
+      }
+    },
+    "5": {
+      "type": "markdown",
+      "content": "## Tokens & cost"
+    },
+    "6": {
+      "type": "data",
+      "title": "Token usage over time — by agent",
+      "query": "timeseries tokens = sum(gen_ai.client.token.usage),\n  by: { gen_ai.agent.name },\n  from: $timeframe.from, to: $timeframe.to",
+      "visualization": "lineChart",
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "gap",
+          "circleChartSettings": { "groupingThresholdType": "relative", "groupingThresholdValue": 0, "valueType": "relative" }
+        }
+      }
+    },
+    "7": {
+      "type": "data",
+      "title": "Token usage — input vs output",
+      "query": "timeseries tokens = sum(gen_ai.client.token.usage),\n  by: { gen_ai.token.type },\n  from: $timeframe.from, to: $timeframe.to",
+      "visualization": "areaChart",
+      "visualizationSettings": {
+        "chartSettings": {
+          "gapPolicy": "gap",
+          "lineThickness": "default",
+          "stacked": true
+        }
+      }
+    },
+    "8": {
+      "type": "data",
+      "title": "Tokens by model",
+      "query": "fetch metric.series, from: $timeframe.from, to: $timeframe.to\n| filter metric.key == \"gen_ai.client.token.usage_sum\"\n| summarize tokens = sum(arraySum(value)), by: { gen_ai.request.model }\n| sort tokens desc",
+      "visualization": "donutChart",
+      "visualizationSettings": {
+        "chartSettings": {
+          "circleChartSettings": { "groupingThresholdType": "relative", "groupingThresholdValue": 0, "valueType": "relative" }
+        }
+      }
+    },
+    "9": {
+      "type": "data",
+      "title": "Top 10 agents by token consumption",
+      "query": "fetch metric.series, from: $timeframe.from, to: $timeframe.to\n| filter metric.key == \"gen_ai.client.token.usage_sum\"\n| summarize\n    input_tokens  = sum(arraySum(value), default:0) filter: { gen_ai.token.type == \"input\"  },\n    output_tokens = sum(arraySum(value), default:0) filter: { gen_ai.token.type == \"output\" },\n    by: { gen_ai.agent.name }\n| fieldsAdd total = input_tokens + output_tokens\n| sort total desc\n| limit 10",
+      "visualization": "table",
+      "visualizationSettings": {
+        "table": {
+          "rowDensity": "condensed",
+          "enableSparklines": false,
+          "hiddenColumns": [],
+          "columnAttributes": [
+            { "id": "gen_ai.agent.name", "label": "Agent" },
+            { "id": "input_tokens",      "label": "Input tokens"  },
+            { "id": "output_tokens",     "label": "Output tokens" },
+            { "id": "total",             "label": "Total"         }
+          ]
+        }
+      }
+    },
+    "10": {
+      "type": "markdown",
+      "content": "## Latency"
+    },
+    "11": {
+      "type": "data",
+      "title": "LLM operation duration — p50 / p95 / p99",
+      "query": "timeseries\n  p50 = percentile(gen_ai.client.operation.duration, 50),\n  p95 = percentile(gen_ai.client.operation.duration, 95),\n  p99 = percentile(gen_ai.client.operation.duration, 99),\n  from: $timeframe.from, to: $timeframe.to",
+      "visualization": "lineChart"
+    },
+    "12": {
+      "type": "data",
+      "title": "p95 latency per agent (s)",
+      "query": "timeseries p95 = percentile(gen_ai.client.operation.duration, 95),\n  by: { gen_ai.agent.name },\n  from: $timeframe.from, to: $timeframe.to",
+      "visualization": "lineChart"
+    },
+    "13": {
+      "type": "data",
+      "title": "Agent span duration distribution (heatmap)",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter startsWith(span.name, \"invoke_agent\")\n| fieldsAdd duration_s = toDouble(duration) / 1000000000\n| summarize count = count(),\n    by: { gen_ai.agent.name, bucket = bin(duration_s, 1) }\n| sort gen_ai.agent.name asc, bucket asc",
+      "visualization": "honeycomb",
+      "visualizationSettings": {}
+    },
+    "14": {
+      "type": "markdown",
+      "content": "## Run quality & topology"
+    },
+    "15": {
+      "type": "data",
+      "title": "Orchestrator finish reasons",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter span.name == \"invoke_agent alpha_orchestrator\"\n| filter isNotNull(gen_ai.response.finish_reasons)\n| summarize count = count(), by: { finish_reason = gen_ai.response.finish_reasons }",
+      "visualization": "donutChart"
+    },
+    "16": {
+      "type": "data",
+      "title": "Tool call mix",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter startsWith(span.name, \"execute_tool\")\n| summarize calls = count(), by: { gen_ai.tool.name }\n| sort calls desc",
+      "visualization": "barChart",
+      "visualizationSettings": {
+        "chartSettings": {
+          "xAxisLabel": "Tool",
+          "yAxisLabel": "Calls",
+          "categoryOverrides": {}
+        }
+      }
+    },
+    "17": {
+      "type": "data",
+      "title": "Spans per report (top traces)",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter service.name == \"alpha-engine\"\n| summarize span_count = count(), start = takeMin(start_time), end = takeMax(end_time), by: { trace.id }\n| fieldsAdd duration_s = (toLong(end) - toLong(start)) / 1000000000\n| sort start desc\n| limit 25\n| fields trace.id, start, duration_s, span_count",
+      "visualization": "table"
+    },
+    "18": {
+      "type": "markdown",
+      "content": "## Recent report runs (orchestrator spans)"
+    },
+    "19": {
+      "type": "data",
+      "title": "Recent reports",
+      "query": "fetch spans, from: $timeframe.from, to: $timeframe.to\n| filter span.name == \"invoke_agent alpha_orchestrator\"\n| sort start_time desc\n| limit 25\n| fields\n    start_time,\n    duration,\n    gen_ai.agent.id,\n    gen_ai.usage.input_tokens,\n    gen_ai.usage.output_tokens,\n    gen_ai.response.finish_reasons,\n    trace.id",
+      "visualization": "table",
+      "visualizationSettings": {
+        "table": {
+          "rowDensity": "condensed",
+          "enableSparklines": false
+        }
+      }
+    },
+    "20": {
+      "type": "markdown",
+      "content": "## Task-runner lifecycle (deployment & smoke-tests)"
+    },
+    "21": {
+      "type": "data",
+      "title": "Recent task-runner events",
+      "query": "fetch events, from: $timeframe.from, to: $timeframe.to\n| filter event.kind == \"CUSTOM_INFO\" or event.kind == \"CUSTOM_DEPLOYMENT\"\n| filter contains(event.name, \"alpha\") or contains(event.title, \"alpha\") or contains(event.source, \"tasks.\")\n| sort timestamp desc\n| limit 25\n| fields timestamp, event.kind, event.name, event.status, event.duration_ms, event.source",
+      "visualization": "table"
+    }
+  },
+  "layouts": {
+    "0":  { "x": 0,  "y": 0,  "w": 24, "h": 3  },
+    "1":  { "x": 0,  "y": 3,  "w": 6,  "h": 4  },
+    "2":  { "x": 6,  "y": 3,  "w": 6,  "h": 4  },
+    "3":  { "x": 12, "y": 3,  "w": 6,  "h": 4  },
+    "4":  { "x": 18, "y": 3,  "w": 6,  "h": 4  },
+    "5":  { "x": 0,  "y": 7,  "w": 24, "h": 2  },
+    "6":  { "x": 0,  "y": 9,  "w": 12, "h": 7  },
+    "7":  { "x": 12, "y": 9,  "w": 12, "h": 7  },
+    "8":  { "x": 0,  "y": 16, "w": 8,  "h": 7  },
+    "9":  { "x": 8,  "y": 16, "w": 16, "h": 7  },
+    "10": { "x": 0,  "y": 23, "w": 24, "h": 2  },
+    "11": { "x": 0,  "y": 25, "w": 12, "h": 7  },
+    "12": { "x": 12, "y": 25, "w": 12, "h": 7  },
+    "13": { "x": 0,  "y": 32, "w": 24, "h": 7  },
+    "14": { "x": 0,  "y": 39, "w": 24, "h": 2  },
+    "15": { "x": 0,  "y": 41, "w": 8,  "h": 7  },
+    "16": { "x": 8,  "y": 41, "w": 16, "h": 7  },
+    "17": { "x": 0,  "y": 48, "w": 24, "h": 7  },
+    "18": { "x": 0,  "y": 55, "w": 24, "h": 2  },
+    "19": { "x": 0,  "y": 57, "w": 24, "h": 8  },
+    "20": { "x": 0,  "y": 65, "w": 24, "h": 2  },
+    "21": { "x": 0,  "y": 67, "w": 24, "h": 7  }
+  }
+}

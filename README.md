@@ -341,6 +341,7 @@ Obs surfaces work out of the box.
 - **Instrumentation deep-dive (start here for any new AI app):** [`docs/instrumentation.md`](./alpha-report-lab/docs/instrumentation.md) — architecture diagram, module hierarchy, every `gen_ai.*` attribute mapped to the line that sets it, the four common pitfalls, and verification DQL.
 - Task-runner observability (Events API v2): [`docs/task-runner-observability.md`](./alpha-report-lab/docs/task-runner-observability.md)
 - DQL validation queries: [`docs/dql-validation-queries.md`](./alpha-report-lab/docs/dql-validation-queries.md)
+- Pre-built Dynatrace dashboard (deploy with `dtctl create db --file ...`): [`docs/dashboards/`](./alpha-report-lab/docs/dashboards/)
 - OneAgent setup: [`docs/oneagent-configuration.md`](./alpha-report-lab/docs/oneagent-configuration.md)
 - OpenPipeline rules (optional `llm.* → gen_ai.*` rename for OpenInference leaf spans): [`docs/openpipeline-configuration.md`](./alpha-report-lab/docs/openpipeline-configuration.md)
 - Cloud VM deployment: [`docs/cloud-vm-deployment.md`](./alpha-report-lab/docs/cloud-vm-deployment.md)
