@@ -1,0 +1,5 @@
+# Root-level gitignore
+
+# Prompt context files containing credentials or sensitive config
+Alpha Report Generator Prompts/\[Instructions\]Prompt Context.md
+Prompt Context.md
